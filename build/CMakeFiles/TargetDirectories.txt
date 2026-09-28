@@ -1,7 +1,0 @@
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/p2p_server.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/edit_cache.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/rebuild_cache.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/list_install_components.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/install.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/install/local.dir
-C:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/CMakeFiles/install/strip.dir
