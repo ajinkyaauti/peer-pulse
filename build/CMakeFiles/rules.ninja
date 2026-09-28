@@ -42,7 +42,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer -BC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build
+  command = C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer -BC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build
   description = Re-running CMake...
   generator = 1
 

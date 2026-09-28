@@ -60,6 +60,30 @@ build CMakeFiles/p2p_server.dir/src/protocol.cpp.obj: CXX_COMPILER__p2p_server_u
   OBJECT_FILE_DIR = CMakeFiles\p2p_server.dir\src
   TARGET_SUPPORT_DIR = CMakeFiles\p2p_server.dir
 
+build CMakeFiles/p2p_server.dir/src/file_manager.cpp.obj: CXX_COMPILER__p2p_server_unscanned_ C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/src/file_manager.cpp || cmake_object_order_depends_target_p2p_server
+  DEP_FILE = CMakeFiles\p2p_server.dir\src\file_manager.cpp.obj.d
+  FLAGS = -std=c++17 -Wall -Wextra -Wpedantic
+  INCLUDES = -IC:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/include
+  OBJECT_DIR = CMakeFiles\p2p_server.dir
+  OBJECT_FILE_DIR = CMakeFiles\p2p_server.dir\src
+  TARGET_SUPPORT_DIR = CMakeFiles\p2p_server.dir
+
+build CMakeFiles/p2p_server.dir/src/tls_context.cpp.obj: CXX_COMPILER__p2p_server_unscanned_ C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/src/tls_context.cpp || cmake_object_order_depends_target_p2p_server
+  DEP_FILE = CMakeFiles\p2p_server.dir\src\tls_context.cpp.obj.d
+  FLAGS = -std=c++17 -Wall -Wextra -Wpedantic
+  INCLUDES = -IC:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/include
+  OBJECT_DIR = CMakeFiles\p2p_server.dir
+  OBJECT_FILE_DIR = CMakeFiles\p2p_server.dir\src
+  TARGET_SUPPORT_DIR = CMakeFiles\p2p_server.dir
+
+build CMakeFiles/p2p_server.dir/src/peer_file_server.cpp.obj: CXX_COMPILER__p2p_server_unscanned_ C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/src/peer_file_server.cpp || cmake_object_order_depends_target_p2p_server
+  DEP_FILE = CMakeFiles\p2p_server.dir\src\peer_file_server.cpp.obj.d
+  FLAGS = -std=c++17 -Wall -Wextra -Wpedantic
+  INCLUDES = -IC:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/include
+  OBJECT_DIR = CMakeFiles\p2p_server.dir
+  OBJECT_FILE_DIR = CMakeFiles\p2p_server.dir\src
+  TARGET_SUPPORT_DIR = CMakeFiles\p2p_server.dir
+
 build CMakeFiles/p2p_server.dir/src/main_server.cpp.obj: CXX_COMPILER__p2p_server_unscanned_ C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/src/main_server.cpp || cmake_object_order_depends_target_p2p_server
   DEP_FILE = CMakeFiles\p2p_server.dir\src\main_server.cpp.obj.d
   FLAGS = -std=c++17 -Wall -Wextra -Wpedantic
@@ -76,8 +100,8 @@ build CMakeFiles/p2p_server.dir/src/main_server.cpp.obj: CXX_COMPILER__p2p_serve
 #############################################
 # Link the executable p2p_server.exe
 
-build p2p_server.exe: CXX_EXECUTABLE_LINKER__p2p_server_ CMakeFiles/p2p_server.dir/src/server.cpp.obj CMakeFiles/p2p_server.dir/src/protocol.cpp.obj CMakeFiles/p2p_server.dir/src/main_server.cpp.obj
-  LINK_LIBRARIES = -lws2_32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+build p2p_server.exe: CXX_EXECUTABLE_LINKER__p2p_server_ CMakeFiles/p2p_server.dir/src/server.cpp.obj CMakeFiles/p2p_server.dir/src/protocol.cpp.obj CMakeFiles/p2p_server.dir/src/file_manager.cpp.obj CMakeFiles/p2p_server.dir/src/tls_context.cpp.obj CMakeFiles/p2p_server.dir/src/peer_file_server.cpp.obj CMakeFiles/p2p_server.dir/src/main_server.cpp.obj | C$:/msys64/ucrt64/lib/libssl.dll.a C$:/msys64/ucrt64/lib/libcrypto.dll.a
+  LINK_LIBRARIES = C:/msys64/ucrt64/lib/libssl.dll.a  C:/msys64/ucrt64/lib/libcrypto.dll.a  -lws2_32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\p2p_server.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
@@ -103,7 +127,7 @@ build edit_cache: phony CMakeFiles/edit_cache.util
 # Utility command for rebuild_cache
 
 build CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer -BC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer -BC:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build"
   DESC = Running CMake to regenerate build system...
   pool = console
   restat = 1
@@ -121,7 +145,7 @@ build list_install_components: phony
 # Utility command for install
 
 build CMakeFiles/install.util: CUSTOM_COMMAND all
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && "C:\Program Files\CMake\bin\cmake.exe" -P cmake_install.cmake"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && C:\msys64\ucrt64\bin\cmake.exe -P cmake_install.cmake"
   DESC = Install the project...
   pool = console
   restat = 1
@@ -133,7 +157,7 @@ build install: phony CMakeFiles/install.util
 # Utility command for install/local
 
 build CMakeFiles/install/local.util: CUSTOM_COMMAND all
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && "C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && C:\msys64\ucrt64\bin\cmake.exe -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake"
   DESC = Installing only the local directory...
   pool = console
   restat = 1
@@ -145,7 +169,7 @@ build install/local: phony CMakeFiles/install/local.util
 # Utility command for install/strip
 
 build CMakeFiles/install/strip.util: CUSTOM_COMMAND all
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && "C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\AJINKYA\OneDrive\Desktop\project\p2p-file-transfer\build && C:\msys64\ucrt64\bin\cmake.exe -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake"
   DESC = Installing the project stripped...
   pool = console
   restat = 1
@@ -174,14 +198,14 @@ build all: phony p2p_server.exe
 #############################################
 # Re-run CMake if any of its inputs changed.
 
-build build.ninja C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/cmake_install.cmake: RERUN_CMAKE | C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Linker/GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Linker/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-windres.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/WindowsPaths.cmake C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/CMakeLists.txt CMakeCache.txt CMakeFiles/4.3.2/CMakeCXXCompiler.cmake CMakeFiles/4.3.2/CMakeRCCompiler.cmake CMakeFiles/4.3.2/CMakeSystem.cmake
+build build.ninja C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/build/cmake_install.cmake: RERUN_CMAKE | C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/CMakeLists.txt C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeRCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindOpenSSL.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindPackageHandleStandardArgs.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindPackageMessage.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Linker/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Linker/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/Windows-GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/Windows-GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-Initialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-windres.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/4.3.2/CMakeCXXCompiler.cmake CMakeFiles/4.3.2/CMakeRCCompiler.cmake CMakeFiles/4.3.2/CMakeSystem.cmake
   pool = console
 
 
 #############################################
 # A missing CMake input file is not an error.
 
-build C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Compiler/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Linker/GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Linker/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Linker/Windows-GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-GNU.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows-windres.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.3/Modules/Platform/WindowsPaths.cmake C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/CMakeLists.txt CMakeCache.txt CMakeFiles/4.3.2/CMakeCXXCompiler.cmake CMakeFiles/4.3.2/CMakeRCCompiler.cmake CMakeFiles/4.3.2/CMakeSystem.cmake: phony
+build C$:/Users/AJINKYA/OneDrive/Desktop/project/p2p-file-transfer/CMakeLists.txt C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeRCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindOpenSSL.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindPackageHandleStandardArgs.cmake C$:/msys64/ucrt64/share/cmake/Modules/FindPackageMessage.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Linker/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Linker/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/Windows-GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Linker/Windows-GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-Initialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows-windres.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Windows.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/4.3.2/CMakeCXXCompiler.cmake CMakeFiles/4.3.2/CMakeRCCompiler.cmake CMakeFiles/4.3.2/CMakeSystem.cmake: phony
 
 
 #############################################

@@ -3,3 +3,10 @@
 159	5834	8069513024845287	CMakeFiles/p2p_server.dir/src/main_server.cpp.obj	98512c45262c337
 3	6596	8069513023176151	CMakeFiles/p2p_server.dir/src/server.cpp.obj	53bd89d7c53b4973
 6598	7575	8069513089252957	p2p_server.exe	1656a1610a4d29e0
+50	4159	8123242549111389	CMakeFiles/p2p_server.dir/src/protocol.cpp.obj	89d9c8588c0ab266
+98	7036	8123242549640930	CMakeFiles/p2p_server.dir/src/file_manager.cpp.obj	e0f8ccb9b73016f3
+153	10500	8123242550188684	CMakeFiles/p2p_server.dir/src/tls_context.cpp.obj	77666a84e03587d3
+278	11867	8123242551437705	CMakeFiles/p2p_server.dir/src/main_server.cpp.obj	98512c45262c337
+13	11904	8123242548775888	CMakeFiles/p2p_server.dir/src/server.cpp.obj	53bd89d7c53b4973
+203	12878	8123242550684101	CMakeFiles/p2p_server.dir/src/peer_file_server.cpp.obj	bcf5332d19db8bf1
+12879	15277	8123242677445420	p2p_server.exe	5e454c3a42c59a9f

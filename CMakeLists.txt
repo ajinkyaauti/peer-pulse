@@ -16,10 +16,16 @@ endif()
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
+# OpenSSL is required by tls_context.cpp / peer_file_server.cpp
+find_package(OpenSSL REQUIRED)
+
 # Source files
 set(SERVER_SOURCES
     src/server.cpp
     src/protocol.cpp
+    src/file_manager.cpp
+    src/tls_context.cpp
+    src/peer_file_server.cpp
     src/main_server.cpp
 )
 
@@ -27,6 +33,7 @@ set(SERVER_SOURCES
 add_executable(p2p_server ${SERVER_SOURCES})
 
 # Link libraries
+target_link_libraries(p2p_server OpenSSL::SSL OpenSSL::Crypto)
 if(WIN32)
     target_link_libraries(p2p_server ws2_32)
 else()

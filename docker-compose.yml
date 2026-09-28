@@ -1,0 +1,20 @@
+services:
+  p2p-file-transfer:
+    build: .
+    image: p2p-file-transfer:latest
+    ports:
+      - "5000:5000"   # Web UI / API
+      - "8080:8080"   # Control TCP server
+      - "8081:8081"   # Peer file transfer
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?set a strong random secret in .env}
+      P2P_WEB_DEBUG: "false"
+      P2P_AUTH_DB: /app/data/p2p_auth.db
+    volumes:
+      - uploads:/app/uploads
+      - authdb:/app/data
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  authdb:

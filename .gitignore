@@ -110,3 +110,7 @@ build/.ninja_deps
 build/.ninja_log
 build/build.ninja
 build/CMakeCache.txt
+/build
+/build
+/build
+CMakeLists.txt

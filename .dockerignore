@@ -1,0 +1,10 @@
+build/
+uploads/
+.git/
+*.md
+web_server.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+p2p_auth.db

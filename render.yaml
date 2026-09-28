@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: p2p-file-transfer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: P2P_WEB_DEBUG
+        value: "false"
+      - key: P2P_AUTH_DB
+        value: /var/data/p2p_auth.db
+    ports:
+      - port: 5000
+        protocol: HTTP
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    healthCheckPath: /api/status
+    maxInstances: 1
+    startCommand: ./docker-entrypoint.sh

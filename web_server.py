@@ -659,5 +659,7 @@ if __name__ == '__main__':
     print("=" * 50)
     print("\nMake sure the TCP server is running on port 8080!")
     print("Starting web server...\n")
-    
-    app.run(host=web_host, port=web_port, debug=True)
+
+    # Debug mode enables the Werkzeug debugger (arbitrary code execution) - never enable in production.
+    web_debug = os.environ.get('P2P_WEB_DEBUG', 'false').lower() == 'true'
+    app.run(host=web_host, port=web_port, debug=web_debug)

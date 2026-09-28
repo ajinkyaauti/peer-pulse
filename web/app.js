@@ -1,7 +1,8 @@
 // P2P File Transfer Web Client
 class P2PClient {
     constructor() {
-        this.serverUrl = window.location.origin;
+        // Use window.P2P_BACKEND_URL if set (for split frontend/backend), else default to same origin
+        this.serverUrl = window.P2P_BACKEND_URL || window.location.origin;
         this.connected = false;
         this.authenticated = false;
         this.username = '';
