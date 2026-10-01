@@ -19,8 +19,22 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-CORS(app)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# Split deploy (GitHub Pages UI + this API): set P2P_CORS_ORIGINS to your Pages URL(s).
+_cors_origins = os.environ.get('P2P_CORS_ORIGINS', '').strip()
+if _cors_origins:
+    CORS(
+        app,
+        supports_credentials=True,
+        origins=[origin.strip() for origin in _cors_origins.split(',') if origin.strip()],
+    )
+    app.config.update(
+        SESSION_COOKIE_SAMESITE='None',
+        SESSION_COOKIE_SECURE=True,
+    )
+else:
+    CORS(app)
 
 app.config['SWAGGER'] = {
     'title': 'P2P File Transfer API',

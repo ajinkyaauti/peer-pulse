@@ -2,7 +2,7 @@
 class P2PClient {
     constructor() {
         // Use window.P2P_BACKEND_URL if set (for split frontend/backend), else default to same origin
-        this.serverUrl = window.P2P_BACKEND_URL || window.location.origin;
+        this.serverUrl = this.resolveServerUrl();
         this.connected = false;
         this.authenticated = false;
         this.username = '';
@@ -12,6 +12,9 @@ class P2PClient {
         this.initElements();
         this.initEventListeners();
         this.loadPeerId();
+        if (window.P2P_BACKEND_URL && this.elements.serverAddress) {
+            this.elements.serverAddress.value = String(window.P2P_BACKEND_URL).replace(/\/$/, '');
+        }
         this.restoreSession();
     }
     
@@ -74,6 +77,21 @@ class P2PClient {
         });
     }
     
+    resolveServerUrl(serverAddr) {
+        if (window.P2P_BACKEND_URL) {
+            return String(window.P2P_BACKEND_URL).replace(/\/$/, '');
+        }
+        const addr = (serverAddr ?? this.elements?.serverAddress?.value ?? '').trim();
+        if (!addr) {
+            return window.location.origin;
+        }
+        return addr.startsWith('http') ? addr : `http://${addr}`;
+    }
+
+    fetchOptions(extra = {}) {
+        return { credentials: 'include', ...extra };
+    }
+
     loadPeerId() {
         const saved = localStorage.getItem('p2p_peer_id');
         if (saved) {
@@ -84,10 +102,7 @@ class P2PClient {
     }
 
     async request(path, options = {}) {
-        const response = await fetch(`${this.serverUrl}${path}`, {
-            credentials: 'same-origin',
-            ...options
-        });
+        const response = await fetch(`${this.serverUrl}${path}`, this.fetchOptions(options));
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.message || 'Request failed');
@@ -199,15 +214,14 @@ class P2PClient {
         }
         
         this.peerId = peerId;
-        this.serverUrl = serverAddr.startsWith('http') ? serverAddr : `http://${serverAddr}`;
-        
+        this.serverUrl = this.resolveServerUrl(serverAddr);
+
         try {
-            const response = await fetch(`${this.serverUrl}/api/connect`, {
+            const response = await fetch(`${this.serverUrl}/api/connect`, this.fetchOptions({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ peer_id: peerId })
-            });
+            }));
             
             const data = await response.json();
             
@@ -227,12 +241,11 @@ class P2PClient {
     
     async disconnect() {
         try {
-            await fetch(`${this.serverUrl}/api/disconnect`, {
+            await fetch(`${this.serverUrl}/api/disconnect`, this.fetchOptions({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ peer_id: this.peerId })
-            });
+            }));
         } catch (error) {
             console.error('Disconnect error:', error);
         }
@@ -346,9 +359,7 @@ class P2PClient {
         if (!this.connected) return;
         
         try {
-            const response = await fetch(`${this.serverUrl}/api/list`, {
-                credentials: 'same-origin'
-            });
+            const response = await fetch(`${this.serverUrl}/api/list`, this.fetchOptions());
             const data = await response.json();
             
             if (data.status === 'success') {
