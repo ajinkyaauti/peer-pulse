@@ -28,9 +28,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --from=builder /src/build/p2p_server ./build/p2p_server
 COPY web_server.py ./
 COPY web/ web/
-COPY certs/ certs/
 
-RUN mkdir -p uploads data \
+# certs/ is intentionally not copied: TlsServerContext generates a
+# self-signed cert/key here automatically on first run (see tls_context.cpp).
+RUN mkdir -p uploads data certs \
     && useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
