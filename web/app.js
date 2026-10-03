@@ -408,40 +408,68 @@ class P2PClient {
     }
     
     displayFilesList(files) {
+        this.elements.filesList.innerHTML = '';
         if (files.length === 0) {
             this.elements.filesList.innerHTML = '<p class="empty-state">No files available</p>';
             return;
         }
-        
-        this.elements.filesList.innerHTML = files.map(file => `
-            <div class="file-item">
-                <div class="file-info">
-                    <div class="file-name">📄 ${file.filename}</div>
-                    <div class="file-meta">
-                        Owner: ${file.owner} | Size: ${this.formatSize(file.size)}
-                    </div>
-                </div>
-                <button class="btn btn-download" onclick="client.downloadFile('${file.filename}', '${file.owner}')">
-                    ⬇️ Download
-                </button>
-            </div>
-        `).join('');
+
+        for (const file of files) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+
+            const info = document.createElement('div');
+            info.className = 'file-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'file-name';
+            nameEl.textContent = `📄 ${file.filename}`;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'file-meta';
+            metaEl.textContent = `Owner: ${file.owner} | Size: ${this.formatSize(file.size)}`;
+
+            info.appendChild(nameEl);
+            info.appendChild(metaEl);
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn btn-download';
+            downloadBtn.textContent = '⬇️ Download';
+            downloadBtn.addEventListener('click', () => this.downloadFile(file.filename, file.owner));
+
+            item.appendChild(info);
+            item.appendChild(downloadBtn);
+            this.elements.filesList.appendChild(item);
+        }
     }
     
     updateMyFilesList() {
+        this.elements.myFilesList.innerHTML = '';
         if (this.myFiles.length === 0) {
             this.elements.myFilesList.innerHTML = '<p class="empty-state">No files shared yet</p>';
             return;
         }
-        
-        this.elements.myFilesList.innerHTML = this.myFiles.map(file => `
-            <div class="file-item">
-                <div class="file-info">
-                    <div class="file-name">📄 ${file.name}</div>
-                    <div class="file-meta">Size: ${this.formatSize(file.size)}</div>
-                </div>
-            </div>
-        `).join('');
+
+        for (const file of this.myFiles) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+
+            const info = document.createElement('div');
+            info.className = 'file-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'file-name';
+            nameEl.textContent = `📄 ${file.name}`;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'file-meta';
+            metaEl.textContent = `Size: ${this.formatSize(file.size)}`;
+
+            info.appendChild(nameEl);
+            info.appendChild(metaEl);
+            item.appendChild(info);
+            this.elements.myFilesList.appendChild(item);
+        }
     }
     
     async downloadFile(filename, owner) {

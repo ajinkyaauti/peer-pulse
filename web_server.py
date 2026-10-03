@@ -432,6 +432,9 @@ def connect():
     
     if not peer_id:
         return jsonify({'status': 'error', 'message': 'Peer ID required'})
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', peer_id):
+        return jsonify({'status': 'error', 'message': 'Peer ID may only contain letters, numbers, hyphens, and underscores (max 64 chars)'}), 400
     
     existing_owner = peer_connections.get(peer_id)
     if existing_owner is not None and existing_owner != session['user_id']:
