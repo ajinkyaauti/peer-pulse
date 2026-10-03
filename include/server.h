@@ -7,6 +7,7 @@
 #include <mutex>
 #include <memory>
 #include <functional>
+#include <cstdint>
 
 #include "net_compat.h"
 
@@ -19,6 +20,20 @@ struct ClientInfo {
     socket_t socket;
     std::vector<std::string> files;
     std::map<std::string, bool> fileVisibility;
+};
+
+struct RoomMessage {
+    uint64_t id;
+    std::string username;   // peer id of the sender
+    std::string text;       // percent-encoded, opaque to the server
+    long long timestamp;    // unix seconds
+};
+
+struct Room {
+    std::string name;                        // percent-encoded, opaque to the server
+    std::map<std::string, long long> members; // peer id -> last-seen (unix seconds)
+    std::vector<RoomMessage> messages;
+    uint64_t nextMessageId = 1;
 };
 
 class Server {
@@ -47,12 +62,23 @@ private:
     void handleDelete(socket_t clientSocket, const std::string& filename);
     void handleVisibility(socket_t clientSocket, const std::string& filename, bool isPublic);
     void handleDisconnect(socket_t clientSocket);
+
+    // Chat rooms live entirely on this server; Flask is just an HTTP<->TCP bridge.
+    void handleRoomCreate(socket_t clientSocket, const std::string& nameEncoded);
+    void handleRoomJoin(socket_t clientSocket, const std::string& roomId);
+    void handleRoomLeave(socket_t clientSocket, const std::string& roomId);
+    void handleRoomMembers(socket_t clientSocket, const std::string& roomId);
+    void handleRoomSend(socket_t clientSocket, const std::string& roomId, const std::string& textEncoded);
+    void handleRoomFetch(socket_t clientSocket, const std::string& roomId, const std::string& sinceIdStr);
+    std::string generateRoomId(); // caller must hold roomsMutex_
     
     int port_;
     socket_t serverSocket_;
     bool running_;
     std::map<socket_t, ClientInfo> clients_;
     std::mutex clientsMutex_;
+    std::map<std::string, Room> rooms_;
+    std::mutex roomsMutex_;
     int transferPort_;
     std::function<std::string(const std::string&)> tokenIssuer_;
 

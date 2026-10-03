@@ -8,19 +8,39 @@ from flask_cors import CORS
 from flasgger import Swagger
 import socket
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 import json
 import re
 import secrets
 import sqlite3
 import threading
+from datetime import datetime, timezone
+from urllib.parse import quote, unquote
 from functools import wraps
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-CORS(app)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# Split deploy (GitHub Pages UI + this API): set P2P_CORS_ORIGINS to your Pages URL(s).
+_cors_origins = os.environ.get('P2P_CORS_ORIGINS', '').strip()
+if _cors_origins:
+    CORS(
+        app,
+        supports_credentials=True,
+        origins=[origin.strip() for origin in _cors_origins.split(',') if origin.strip()],
+    )
+    app.config.update(
+        SESSION_COOKIE_SAMESITE='None',
+        SESSION_COOKIE_SECURE=True,
+    )
+else:
+    CORS(app)
 
 app.config['SWAGGER'] = {
     'title': 'P2P File Transfer API',
@@ -33,12 +53,13 @@ swagger = Swagger(app)
 
 
 # Configuration
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TCP_SERVER_HOST = 'localhost'
 TCP_SERVER_PORT = 8080
-UPLOAD_FOLDER = 'uploads'
-WEB_FOLDER = 'web'
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+WEB_FOLDER = os.path.join(BASE_DIR, 'web')
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-AUTH_DB = os.environ.get('P2P_AUTH_DB', 'p2p_auth.db')
+AUTH_DB = os.environ.get('P2P_AUTH_DB', os.path.join(BASE_DIR, 'p2p_auth.db'))
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 
@@ -53,9 +74,70 @@ def initialize_auth_db():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Rooms, membership, and chat messages now live entirely in the C++
+        # P2P server (in-memory, per ROOM_* TCP commands). Flask only keeps
+        # the metadata for files shared in chat, since the file bytes arrive
+        # over HTTP multipart upload rather than the TCP protocol.
+        database.execute('''
+            CREATE TABLE IF NOT EXISTS room_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                username TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
 
 initialize_auth_db()
+
+ROOM_ID_PATTERN = re.compile(r'[A-Z0-9]{4,10}')
+ROOM_MESSAGE_MAX_LENGTH = 1000
+ROOM_FILE_MARKER = '\x01FILE\x01'
+
+
+def chat_peer_id_for(user_id):
+    """Derive a stable, collision-free TCP peer ID for a user's chat connection."""
+    return f'chatuser_{user_id}'
+
+
+def resolve_chat_username(database, peer_id):
+    """Map a chat peer ID back to the account's display username."""
+    if peer_id.startswith('chatuser_'):
+        try:
+            user_id = int(peer_id[len('chatuser_'):])
+        except ValueError:
+            return peer_id
+        row = database.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        if row:
+            return row[0]
+    return peer_id
+
+
+def encode_file_marker(file_id, filename, size):
+    """Pack file-share metadata into the opaque text the C++ server relays."""
+    return f'{ROOM_FILE_MARKER}{file_id}\x01{filename}\x01{size}'
+
+
+def decode_room_message(text):
+    """Turn relayed, percent-decoded chat text back into a JSON-friendly entry."""
+    if text.startswith(ROOM_FILE_MARKER):
+        parts = text[len(ROOM_FILE_MARKER):].split('\x01')
+        if len(parts) == 3:
+            file_id, filename, size = parts
+            try:
+                return {'type': 'file', 'file_id': int(file_id), 'file_name': filename, 'file_size': int(size)}
+            except ValueError:
+                pass
+    return {'type': 'text', 'message': text}
+
+
+def format_room_timestamp(unix_seconds):
+    """Match the 'YYYY-MM-DD HH:MM:SS' shape the frontend already parses as UTC."""
+    return datetime.fromtimestamp(int(unix_seconds), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 # Ensure upload directory exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -92,6 +174,28 @@ def safe_peer_path(peer_id, filename=None):
 
     candidate = os.path.realpath(os.path.join(peer_root, filename))
     if candidate != peer_root and not candidate.startswith(peer_root + os.sep):
+        raise ValueError('Invalid file path')
+    return candidate
+
+
+ROOM_UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, 'rooms')
+
+
+def safe_room_path(room_id, filename=None):
+    """Return a path confined to this room's upload directory."""
+    if not re.fullmatch(r'[A-Z0-9]{4,10}', room_id):
+        raise ValueError('Invalid room ID')
+
+    rooms_root = os.path.realpath(ROOM_UPLOAD_FOLDER)
+    room_root = os.path.realpath(os.path.join(rooms_root, room_id))
+    if not (room_root == rooms_root or room_root.startswith(rooms_root + os.sep)):
+        raise ValueError('Invalid room path')
+
+    if filename is None:
+        return room_root
+
+    candidate = os.path.realpath(os.path.join(room_root, filename))
+    if candidate != room_root and not candidate.startswith(room_root + os.sep):
         raise ValueError('Invalid file path')
     return candidate
 
@@ -328,6 +432,9 @@ def connect():
     
     if not peer_id:
         return jsonify({'status': 'error', 'message': 'Peer ID required'})
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', peer_id):
+        return jsonify({'status': 'error', 'message': 'Peer ID may only contain letters, numbers, hyphens, and underscores (max 64 chars)'}), 400
     
     existing_owner = peer_connections.get(peer_id)
     if existing_owner is not None and existing_owner != session['user_id']:
@@ -544,14 +651,19 @@ def download_file():
     if not filename or not owner:
         return jsonify({'status': 'error', 'message': 'Filename and owner required'}), 400
     
-    # Find the file
+    # Find the file: allow owners to download their own files, and anyone
+    # to download files the owner has made public.
     if owner in file_registry:
         for file_info in file_registry[owner]:
-            if (file_info['filename'] == filename and
-                    file_info['user_id'] == session['user_id']):
-                filepath = file_info['path']
-                if os.path.realpath(filepath) == safe_peer_path(owner, filename) and os.path.exists(filepath):
-                    return send_file(filepath, as_attachment=True, download_name=filename)
+            if file_info['filename'] != filename:
+                continue
+            is_own_file = file_info['user_id'] == session['user_id']
+            is_public = file_info.get('visibility', 'public') == 'public'
+            if not (is_own_file or is_public):
+                continue
+            filepath = file_info['path']
+            if os.path.realpath(filepath) == safe_peer_path(owner, filename) and os.path.exists(filepath):
+                return send_file(filepath, as_attachment=True, download_name=filename)
     
     return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
@@ -585,6 +697,365 @@ def update_file_visibility():
 
     file_info['visibility'] = visibility
     return jsonify({'status': 'success', 'filename': filename, 'visibility': visibility})
+
+
+@app.route('/api/rooms', methods=['POST'])
+@require_authentication
+def create_room():
+    """Create a new chat room and auto-join the creator.
+
+    Rooms/membership/messages live on the C++ P2P server; this just
+    translates the HTTP call into a ROOM_CREATE TCP command.
+    ---
+    tags:
+      - Rooms
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            name:
+              type: string
+    responses:
+      201:
+        description: Room created
+      502:
+        description: Chat backend unavailable
+    """
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).strip()[:64] or 'Room'
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    response = tcp_client.send_command(f'ROOM_CREATE {quote(name, safe="")}', peer_id)
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+
+    _, room_id, encoded_name = response.split(' ', 2)
+    return jsonify({'status': 'success', 'room_id': room_id, 'name': unquote(encoded_name)}), 201
+
+
+@app.route('/api/rooms/join', methods=['POST'])
+@require_authentication
+def join_room_route():
+    """Join an existing room by its room ID.
+    ---
+    tags:
+      - Rooms
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            room_id:
+              type: string
+    responses:
+      200:
+        description: Joined room
+      404:
+        description: Room not found
+    """
+    data = request.get_json(silent=True) or {}
+    room_id = str(data.get('room_id', '')).strip().upper()
+
+    if not ROOM_ID_PATTERN.fullmatch(room_id):
+        return jsonify({'status': 'error', 'message': 'Invalid room ID'}), 400
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    response = tcp_client.send_command(f'ROOM_JOIN {room_id}', peer_id)
+    if response.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+
+    _, resp_room_id, encoded_name = response.split(' ', 2)
+    return jsonify({'status': 'success', 'room_id': resp_room_id, 'name': unquote(encoded_name)})
+
+
+@app.route('/api/rooms/leave', methods=['POST'])
+@require_authentication
+def leave_room_route():
+    """Leave a room.
+    ---
+    tags:
+      - Rooms
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            room_id:
+              type: string
+    responses:
+      200:
+        description: Left room
+    """
+    data = request.get_json(silent=True) or {}
+    room_id = str(data.get('room_id', '')).strip().upper()
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.send_command(f'ROOM_LEAVE {room_id}', peer_id)
+    return jsonify({'status': 'success'})
+
+
+@app.route('/api/rooms/<room_id>/members', methods=['GET'])
+@require_authentication
+def room_members_route(room_id):
+    """List members of a room, flagging who is currently online.
+    ---
+    tags:
+      - Rooms
+    responses:
+      200:
+        description: Member list
+      404:
+        description: Room not found or not a member
+    """
+    room_id = room_id.strip().upper()
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    response = tcp_client.send_command(f'ROOM_MEMBERS {room_id}', peer_id)
+    if response.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+
+    parts = response.split(' ')
+    members = []
+    with sqlite3.connect(AUTH_DB) as database:
+        for entry in parts[2:]:
+            if ':' not in entry:
+                continue
+            member_peer_id, online_flag = entry.rsplit(':', 1)
+            members.append({
+                'username': resolve_chat_username(database, member_peer_id),
+                'online': online_flag == '1'
+            })
+    return jsonify({'status': 'success', 'members': members})
+
+
+@app.route('/api/rooms/<room_id>/messages', methods=['GET'])
+@require_authentication
+def room_messages_route(room_id):
+    """Fetch chat messages newer than `since_id`, and mark the caller as present.
+    ---
+    tags:
+      - Rooms
+    parameters:
+      - in: query
+        name: since_id
+        type: integer
+    responses:
+      200:
+        description: Messages
+      404:
+        description: Room not found or not a member
+    """
+    room_id = room_id.strip().upper()
+    try:
+        since_id = int(request.args.get('since_id', 0))
+    except ValueError:
+        since_id = 0
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    response = tcp_client.send_command(f'ROOM_FETCH {room_id} {since_id}', peer_id)
+    if response.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+
+    parts = response.split(' ')
+    messages = []
+    with sqlite3.connect(AUTH_DB) as database:
+        for entry in parts[2:]:
+            msg_id_s, sender_peer_id, ts_s, text_encoded = entry.split(':', 3)
+            entry_data = decode_room_message(unquote(text_encoded))
+            entry_data.update({
+                'id': int(msg_id_s),
+                'username': resolve_chat_username(database, sender_peer_id),
+                'created_at': format_room_timestamp(ts_s)
+            })
+            messages.append(entry_data)
+    return jsonify({'status': 'success', 'messages': messages})
+
+
+@app.route('/api/rooms/<room_id>/messages', methods=['POST'])
+@require_authentication
+def send_room_message_route(room_id):
+    """Post a chat message to a room.
+    ---
+    tags:
+      - Rooms
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+    responses:
+      201:
+        description: Message sent
+      400:
+        description: Empty or oversized message
+      404:
+        description: Room not found or not a member
+    """
+    room_id = room_id.strip().upper()
+    data = request.get_json(silent=True) or {}
+    message = str(data.get('message', '')).strip()
+
+    if not message:
+        return jsonify({'status': 'error', 'message': 'Message is empty'}), 400
+    if len(message) > ROOM_MESSAGE_MAX_LENGTH:
+        return jsonify({'status': 'error', 'message': 'Message is too long'}), 400
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    response = tcp_client.send_command(f'ROOM_SEND {room_id} {quote(message, safe="")}', peer_id)
+    if response.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+
+    message_id = int(response.split(' ', 1)[1])
+    return jsonify({'status': 'success', 'id': message_id}), 201
+
+
+@app.route('/api/rooms/<room_id>/files', methods=['POST'])
+@require_authentication
+def upload_room_file(room_id):
+    """Share a file inside a room's chat.
+
+    File bytes are stored by Flask (browsers upload over HTTP multipart, not
+    the TCP protocol); the share is announced in chat via a ROOM_SEND whose
+    text is a small file marker that decode_room_message() recognizes.
+    ---
+    tags:
+      - Rooms
+    consumes:
+      - multipart/form-data
+    parameters:
+      - in: formData
+        name: file
+        type: file
+        required: true
+    responses:
+      201:
+        description: File shared
+      400:
+        description: Invalid file
+      404:
+        description: Room not found or not a member
+      413:
+        description: File too large
+    """
+    room_id = room_id.strip().upper()
+
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file provided'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+
+    filename = secure_filename(file.filename)
+    if not filename or not re.fullmatch(r'[A-Za-z0-9_.-]{1,255}', filename):
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
+
+    if request.content_length and request.content_length > MAX_FILE_SIZE:
+        return jsonify({'status': 'error', 'message': 'File is too large'}), 413
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    membership_check = tcp_client.send_command(f'ROOM_MEMBERS {room_id}', peer_id)
+    if membership_check.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+
+    try:
+        room_dir = safe_room_path(room_id)
+        os.makedirs(room_dir, exist_ok=True)
+        stored_name = f'{secrets.token_hex(8)}_{filename}'
+        filepath = safe_room_path(room_id, stored_name)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid file path'}), 400
+
+    file.save(filepath)
+    filesize = os.path.getsize(filepath)
+    if filesize > MAX_FILE_SIZE:
+        os.remove(filepath)
+        return jsonify({'status': 'error', 'message': 'File is too large'}), 413
+
+    with sqlite3.connect(AUTH_DB) as database:
+        file_cursor = database.execute(
+            'INSERT INTO room_files (room_id, user_id, username, filename, stored_name, size) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (room_id, session['user_id'], session['username'], filename, stored_name, filesize)
+        )
+        file_id = file_cursor.lastrowid
+
+    marker = encode_file_marker(file_id, filename, filesize)
+    response = tcp_client.send_command(f'ROOM_SEND {room_id} {quote(marker, safe="")}', peer_id)
+    if not response.startswith('OK'):
+        return jsonify({'status': 'error', 'message': response}), 502
+    message_id = int(response.split(' ', 1)[1])
+
+    return jsonify({
+        'status': 'success',
+        'id': message_id,
+        'file_id': file_id,
+        'filename': filename,
+        'size': filesize
+    }), 201
+
+
+@app.route('/api/rooms/<room_id>/files/<int:file_id>/download', methods=['GET'])
+@require_authentication
+def download_room_file(room_id, file_id):
+    """Download a file that was shared in a room.
+    ---
+    tags:
+      - Rooms
+    responses:
+      200:
+        description: File contents
+      404:
+        description: File not found
+    """
+    room_id = room_id.strip().upper()
+
+    peer_id = chat_peer_id_for(session['user_id'])
+    tcp_client.connect_peer(peer_id)
+    membership_check = tcp_client.send_command(f'ROOM_MEMBERS {room_id}', peer_id)
+    if membership_check.startswith('ERROR'):
+        return jsonify({'status': 'error', 'message': 'Room not found'}), 404
+
+    with sqlite3.connect(AUTH_DB) as database:
+        row = database.execute(
+            'SELECT filename, stored_name FROM room_files WHERE id = ? AND room_id = ?',
+            (file_id, room_id)
+        ).fetchone()
+
+    if row is None:
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+    filename, stored_name = row
+    try:
+        filepath = safe_room_path(room_id, stored_name)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid file path'}), 400
+
+    if not os.path.exists(filepath):
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+    return send_file(filepath, as_attachment=True, download_name=filename)
 
 
 @app.route('/api/file/delete', methods=['POST'])
@@ -647,14 +1118,21 @@ def status():
 
 
 if __name__ == '__main__':
+    web_host = os.environ.get('P2P_WEB_HOST', '0.0.0.0')
+    web_port = int(os.environ.get('P2P_WEB_PORT', 5000))
+
     print("=" * 50)
     print("P2P File Transfer Web Server")
     print("=" * 50)
-    print(f"Web Interface: http://localhost:5000")
+    print(f"Web Interface: http://localhost:{web_port}")
     print(f"TCP Server: {TCP_SERVER_HOST}:{TCP_SERVER_PORT}")
     print(f"Upload Folder: {os.path.abspath(UPLOAD_FOLDER)}")
     print("=" * 50)
     print("\nMake sure the TCP server is running on port 8080!")
     print("Starting web server...\n")
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    # Debug mode enables the Werkzeug debugger (arbitrary code execution) - never enable in production.
+    web_debug = os.environ.get('P2P_WEB_DEBUG', 'false').lower() == 'true'
+    # use_reloader spawns a second process; disable explicitly so exactly one
+    # process ever owns the in-memory file_registry/peer_connections state.
+    app.run(host=web_host, port=web_port, debug=web_debug, use_reloader=False)

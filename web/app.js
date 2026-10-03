@@ -1,16 +1,23 @@
 // P2P File Transfer Web Client
 class P2PClient {
     constructor() {
-        this.serverUrl = 'http://localhost:5000';
+        // Use window.P2P_BACKEND_URL if set (for split frontend/backend), else default to same origin
+        this.serverUrl = this.resolveServerUrl();
         this.connected = false;
         this.authenticated = false;
         this.username = '';
         this.peerId = '';
         this.myFiles = [];
+        this.currentRoom = null;
+        this.lastMessageId = 0;
+        this.roomPollTimer = null;
         
         this.initElements();
         this.initEventListeners();
         this.loadPeerId();
+        if (window.P2P_BACKEND_URL && this.elements.serverAddress) {
+            this.elements.serverAddress.value = String(window.P2P_BACKEND_URL).replace(/\/$/, '');
+        }
         this.restoreSession();
     }
     
@@ -37,7 +44,23 @@ class P2PClient {
             myFilesList: document.getElementById('myFilesList'),
             activityLog: document.getElementById('activityLog'),
             statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText')
+            statusText: document.getElementById('statusText'),
+            roomName: document.getElementById('roomName'),
+            createRoomBtn: document.getElementById('createRoomBtn'),
+            roomIdInput: document.getElementById('roomIdInput'),
+            joinRoomBtn: document.getElementById('joinRoomBtn'),
+            roomStatus: document.getElementById('roomStatus'),
+            roomJoinPanel: document.getElementById('roomJoinPanel'),
+            roomChatPanel: document.getElementById('roomChatPanel'),
+            currentRoomName: document.getElementById('currentRoomName'),
+            currentRoomId: document.getElementById('currentRoomId'),
+            leaveRoomBtn: document.getElementById('leaveRoomBtn'),
+            roomMembers: document.getElementById('roomMembers'),
+            chatMessages: document.getElementById('chatMessages'),
+            chatInput: document.getElementById('chatInput'),
+            sendChatBtn: document.getElementById('sendChatBtn'),
+            roomFileInput: document.getElementById('roomFileInput'),
+            roomFileBtn: document.getElementById('roomFileBtn')
         };
     }
     
@@ -71,8 +94,37 @@ class P2PClient {
             this.elements.fileInput.files = e.dataTransfer.files;
             this.handleFileSelect({ target: this.elements.fileInput });
         });
+
+        // Rooms & chat
+        this.elements.createRoomBtn.addEventListener('click', () => this.createRoom());
+        this.elements.joinRoomBtn.addEventListener('click', () => this.joinRoom());
+        this.elements.leaveRoomBtn.addEventListener('click', () => this.leaveRoom());
+        this.elements.sendChatBtn.addEventListener('click', () => this.sendChatMessage());
+        this.elements.chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.sendChatMessage();
+            }
+        });
+        this.elements.roomFileBtn.addEventListener('click', () => this.elements.roomFileInput.click());
+        this.elements.roomFileInput.addEventListener('change', (e) => this.uploadRoomFile(e));
     }
     
+    resolveServerUrl(serverAddr) {
+        if (window.P2P_BACKEND_URL) {
+            return String(window.P2P_BACKEND_URL).replace(/\/$/, '');
+        }
+        const addr = (serverAddr ?? this.elements?.serverAddress?.value ?? '').trim();
+        if (!addr) {
+            return window.location.origin;
+        }
+        return addr.startsWith('http') ? addr : `http://${addr}`;
+    }
+
+    fetchOptions(extra = {}) {
+        return { credentials: 'include', ...extra };
+    }
+
     loadPeerId() {
         const saved = localStorage.getItem('p2p_peer_id');
         if (saved) {
@@ -83,10 +135,7 @@ class P2PClient {
     }
 
     async request(path, options = {}) {
-        const response = await fetch(`${this.serverUrl}${path}`, {
-            credentials: 'same-origin',
-            ...options
-        });
+        const response = await fetch(`${this.serverUrl}${path}`, this.fetchOptions(options));
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.message || 'Request failed');
@@ -117,6 +166,17 @@ class P2PClient {
         this.elements.connectBtn.disabled = !this.authenticated || this.connected;
         this.elements.uploadBtn.disabled = !this.authenticated || !this.connected;
         this.elements.refreshBtn.disabled = !this.authenticated || !this.connected;
+        this.setLockedTabs(!this.authenticated);
+    }
+
+    setLockedTabs(locked) {
+        document.querySelectorAll('.tab-btn[data-tab="upload"], .tab-btn[data-tab="files"], .tab-btn[data-tab="room"]').forEach(btn => {
+            btn.disabled = locked;
+            btn.title = locked ? 'Sign in first' : '';
+        });
+        if (locked) {
+            document.querySelector('.tab-btn[data-tab="setup"]').click();
+        }
     }
 
     async login() {
@@ -133,6 +193,7 @@ class P2PClient {
             this.elements.password.value = '';
             this.log(`Signed in as ${data.username}`, 'success');
         } catch (error) {
+            this.elements.authStatus.textContent = `Login failed: ${error.message}`;
             this.log(`Login failed: ${error.message}`, 'error');
         }
     }
@@ -147,8 +208,10 @@ class P2PClient {
                     password: this.elements.password.value
                 })
             });
+            this.elements.authStatus.textContent = 'Registration complete. You can now log in.';
             this.log('Registration complete. You can now log in.', 'success');
         } catch (error) {
+            this.elements.authStatus.textContent = `Registration failed: ${error.message}`;
             this.log(`Registration failed: ${error.message}`, 'error');
         }
     }
@@ -156,6 +219,9 @@ class P2PClient {
     async logout() {
         if (this.connected) {
             await this.disconnect();
+        }
+        if (this.currentRoom) {
+            await this.leaveRoom();
         }
 
         try {
@@ -184,15 +250,14 @@ class P2PClient {
         }
         
         this.peerId = peerId;
-        this.serverUrl = serverAddr.startsWith('http') ? serverAddr : `http://${serverAddr}`;
-        
+        this.serverUrl = this.resolveServerUrl(serverAddr);
+
         try {
-            const response = await fetch(`${this.serverUrl}/api/connect`, {
+            const response = await fetch(`${this.serverUrl}/api/connect`, this.fetchOptions({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ peer_id: peerId })
-            });
+            }));
             
             const data = await response.json();
             
@@ -212,12 +277,11 @@ class P2PClient {
     
     async disconnect() {
         try {
-            await fetch(`${this.serverUrl}/api/disconnect`, {
+            await fetch(`${this.serverUrl}/api/disconnect`, this.fetchOptions({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ peer_id: this.peerId })
-            });
+            }));
         } catch (error) {
             console.error('Disconnect error:', error);
         }
@@ -331,9 +395,7 @@ class P2PClient {
         if (!this.connected) return;
         
         try {
-            const response = await fetch(`${this.serverUrl}/api/list`, {
-                credentials: 'same-origin'
-            });
+            const response = await fetch(`${this.serverUrl}/api/list`, this.fetchOptions());
             const data = await response.json();
             
             if (data.status === 'success') {
@@ -346,40 +408,68 @@ class P2PClient {
     }
     
     displayFilesList(files) {
+        this.elements.filesList.innerHTML = '';
         if (files.length === 0) {
             this.elements.filesList.innerHTML = '<p class="empty-state">No files available</p>';
             return;
         }
-        
-        this.elements.filesList.innerHTML = files.map(file => `
-            <div class="file-item">
-                <div class="file-info">
-                    <div class="file-name">📄 ${file.filename}</div>
-                    <div class="file-meta">
-                        Owner: ${file.owner} | Size: ${this.formatSize(file.size)}
-                    </div>
-                </div>
-                <button class="btn btn-download" onclick="client.downloadFile('${file.filename}', '${file.owner}')">
-                    ⬇️ Download
-                </button>
-            </div>
-        `).join('');
+
+        for (const file of files) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+
+            const info = document.createElement('div');
+            info.className = 'file-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'file-name';
+            nameEl.textContent = `📄 ${file.filename}`;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'file-meta';
+            metaEl.textContent = `Owner: ${file.owner} | Size: ${this.formatSize(file.size)}`;
+
+            info.appendChild(nameEl);
+            info.appendChild(metaEl);
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn btn-download';
+            downloadBtn.textContent = '⬇️ Download';
+            downloadBtn.addEventListener('click', () => this.downloadFile(file.filename, file.owner));
+
+            item.appendChild(info);
+            item.appendChild(downloadBtn);
+            this.elements.filesList.appendChild(item);
+        }
     }
     
     updateMyFilesList() {
+        this.elements.myFilesList.innerHTML = '';
         if (this.myFiles.length === 0) {
             this.elements.myFilesList.innerHTML = '<p class="empty-state">No files shared yet</p>';
             return;
         }
-        
-        this.elements.myFilesList.innerHTML = this.myFiles.map(file => `
-            <div class="file-item">
-                <div class="file-info">
-                    <div class="file-name">📄 ${file.name}</div>
-                    <div class="file-meta">Size: ${this.formatSize(file.size)}</div>
-                </div>
-            </div>
-        `).join('');
+
+        for (const file of this.myFiles) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+
+            const info = document.createElement('div');
+            info.className = 'file-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'file-name';
+            nameEl.textContent = `📄 ${file.name}`;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'file-meta';
+            metaEl.textContent = `Size: ${this.formatSize(file.size)}`;
+
+            info.appendChild(nameEl);
+            info.appendChild(metaEl);
+            item.appendChild(info);
+            this.elements.myFilesList.appendChild(item);
+        }
     }
     
     async downloadFile(filename, owner) {
@@ -406,8 +496,192 @@ class P2PClient {
         if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
         return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
     }
+
+    async createRoom() {
+        const name = this.elements.roomName.value.trim();
+        try {
+            const data = await this.request('/api/rooms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            this.enterRoom(data.room_id, data.name);
+            this.log(`Created room ${data.room_id}`, 'success');
+        } catch (error) {
+            this.elements.roomStatus.textContent = `Failed to create room: ${error.message}`;
+            this.log(`Failed to create room: ${error.message}`, 'error');
+        }
+    }
+
+    async joinRoom() {
+        const roomId = this.elements.roomIdInput.value.trim().toUpperCase();
+        if (!roomId) {
+            this.elements.roomStatus.textContent = 'Enter a room ID';
+            return;
+        }
+        try {
+            const data = await this.request('/api/rooms/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_id: roomId })
+            });
+            this.enterRoom(data.room_id, data.name);
+            this.log(`Joined room ${data.room_id}`, 'success');
+        } catch (error) {
+            this.elements.roomStatus.textContent = `Failed to join room: ${error.message}`;
+            this.log(`Failed to join room: ${error.message}`, 'error');
+        }
+    }
+
+    enterRoom(roomId, name) {
+        this.currentRoom = roomId;
+        this.lastMessageId = 0;
+        this.elements.currentRoomId.textContent = roomId;
+        this.elements.currentRoomName.textContent = name;
+        this.elements.roomJoinPanel.style.display = 'none';
+        this.elements.roomChatPanel.style.display = 'block';
+        this.elements.chatMessages.innerHTML = '';
+        this.refreshRoomMembers();
+        this.pollRoomMessages();
+        this.roomPollTimer = setInterval(() => {
+            this.pollRoomMessages();
+            this.refreshRoomMembers();
+        }, 2500);
+    }
+
+    async leaveRoom() {
+        if (!this.currentRoom) return;
+        const roomId = this.currentRoom;
+
+        if (this.roomPollTimer) {
+            clearInterval(this.roomPollTimer);
+            this.roomPollTimer = null;
+        }
+
+        try {
+            await this.request('/api/rooms/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_id: roomId })
+            });
+        } catch (error) {
+            this.log(`Failed to leave room: ${error.message}`, 'error');
+        }
+
+        this.currentRoom = null;
+        this.elements.roomChatPanel.style.display = 'none';
+        this.elements.roomJoinPanel.style.display = 'block';
+        this.elements.roomStatus.textContent = '';
+        this.elements.roomIdInput.value = '';
+        this.log(`Left room ${roomId}`, 'info');
+    }
+
+    async pollRoomMessages() {
+        if (!this.currentRoom) return;
+        try {
+            const data = await this.request(
+                `/api/rooms/${this.currentRoom}/messages?since_id=${this.lastMessageId}`
+            );
+            for (const msg of data.messages) {
+                this.appendChatMessage(msg);
+                this.lastMessageId = Math.max(this.lastMessageId, msg.id);
+            }
+        } catch (error) {
+            console.error('Failed to poll messages:', error);
+        }
+    }
+
+    async refreshRoomMembers() {
+        if (!this.currentRoom) return;
+        try {
+            const data = await this.request(`/api/rooms/${this.currentRoom}/members`);
+            this.elements.roomMembers.innerHTML = data.members.map(member => `
+                <span class="room-member ${member.online ? 'online' : ''}">
+                    <span class="room-member-dot"></span>${this.escapeHtml(member.username)}
+                </span>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to refresh members:', error);
+        }
+    }
+
+    appendChatMessage(msg) {
+        const isOwn = msg.username === this.username;
+        const el = document.createElement('div');
+        el.className = `chat-message ${isOwn ? 'own' : ''}`;
+        const time = new Date(msg.created_at + 'Z').toLocaleTimeString();
+        el.innerHTML = `
+            <div class="chat-message-meta">${this.escapeHtml(msg.username)} • ${time}</div>
+            <div class="chat-message-text"></div>
+        `;
+
+        if (msg.type === 'file') {
+            const textEl = el.querySelector('.chat-message-text');
+            const link = document.createElement('a');
+            link.href = `${this.serverUrl}/api/rooms/${this.currentRoom}/files/${msg.file_id}/download`;
+            link.textContent = `📎 ${msg.file_name} (${this.formatSize(msg.file_size)})`;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            textEl.appendChild(link);
+        } else {
+            el.querySelector('.chat-message-text').textContent = msg.message;
+        }
+
+        this.elements.chatMessages.appendChild(el);
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    async uploadRoomFile(event) {
+        const file = event.target.files[0];
+        event.target.value = '';
+        if (!file || !this.currentRoom) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch(
+                `${this.serverUrl}/api/rooms/${this.currentRoom}/files`,
+                this.fetchOptions({ method: 'POST', body: formData })
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Upload failed');
+            }
+            this.log(`Shared file: ${data.filename}`, 'success');
+            this.pollRoomMessages();
+        } catch (error) {
+            this.log(`Failed to share file: ${error.message}`, 'error');
+        }
+    }
+
+    async sendChatMessage() {
+        const message = this.elements.chatInput.value.trim();
+        if (!message || !this.currentRoom) return;
+
+        this.elements.chatInput.value = '';
+        try {
+            await this.request(`/api/rooms/${this.currentRoom}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+            this.pollRoomMessages();
+        } catch (error) {
+            this.log(`Failed to send message: ${error.message}`, 'error');
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
     
     log(message, type = 'info') {
+        console.log(`[${type}] ${message}`);
+        if (!this.elements.activityLog) return;
+
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${type}`;
@@ -424,3 +698,15 @@ class P2PClient {
 
 // Initialize the client
 const client = new P2PClient();
+
+// Simple tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
+});
+client.setLockedTabs(!client.authenticated);

@@ -5,8 +5,19 @@
 #include <cstring>
 #include <algorithm>
 #include <sstream>
+#include <random>
+#include <chrono>
 
 namespace p2p {
+
+namespace {
+long long nowSeconds() {
+    return static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+constexpr long long kRoomOnlineWindowSeconds = 30;
+} // namespace
 
 Server::Server(int port) 
     : port_(port), serverSocket_(INVALID_SOCKET), running_(false), transferPort_(0) {
@@ -232,6 +243,42 @@ void Server::processCommand(socket_t clientSocket, const std::string& command) {
         }
     } else if (cmd == CMD_DISCONNECT && tokens.size() == 1) {
         handleDisconnect(clientSocket);
+    } else if (cmd == CMD_ROOM_CREATE && tokens.size() == 2) {
+        if (!Protocol::isSafeEncodedText(tokens[1])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid room name"));
+            return;
+        }
+        handleRoomCreate(clientSocket, tokens[1]);
+    } else if (cmd == CMD_ROOM_JOIN && tokens.size() == 2) {
+        if (!Protocol::isSafeRoomId(tokens[1])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid room ID"));
+            return;
+        }
+        handleRoomJoin(clientSocket, tokens[1]);
+    } else if (cmd == CMD_ROOM_LEAVE && tokens.size() == 2) {
+        if (!Protocol::isSafeRoomId(tokens[1])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid room ID"));
+            return;
+        }
+        handleRoomLeave(clientSocket, tokens[1]);
+    } else if (cmd == CMD_ROOM_MEMBERS && tokens.size() == 2) {
+        if (!Protocol::isSafeRoomId(tokens[1])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid room ID"));
+            return;
+        }
+        handleRoomMembers(clientSocket, tokens[1]);
+    } else if (cmd == CMD_ROOM_SEND && tokens.size() == 3) {
+        if (!Protocol::isSafeRoomId(tokens[1]) || !Protocol::isSafeEncodedText(tokens[2])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid arguments"));
+            return;
+        }
+        handleRoomSend(clientSocket, tokens[1], tokens[2]);
+    } else if (cmd == CMD_ROOM_FETCH && tokens.size() == 3) {
+        if (!Protocol::isSafeRoomId(tokens[1])) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid room ID"));
+            return;
+        }
+        handleRoomFetch(clientSocket, tokens[1], tokens[2]);
     } else if (cmd == CMD_LIST ||
                (cmd == CMD_CONNECT && tokens.size() != 2) ||
                (cmd == CMD_UPLOAD && tokens.size() != 3) ||
@@ -254,6 +301,192 @@ void Server::handleConnect(socket_t clientSocket, const std::string& peerId) {
     
     std::cout << "Client registered: " << peerId << std::endl;
     sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, "Connected"));
+}
+
+std::string Server::generateRoomId() {
+    static const std::string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<size_t> dist(0, alphabet.size() - 1);
+
+    for (int attempt = 0; attempt < 20; ++attempt) {
+        std::string candidate;
+        for (int i = 0; i < 6; ++i) {
+            candidate += alphabet[dist(rng)];
+        }
+        if (rooms_.find(candidate) == rooms_.end()) {
+            return candidate;
+        }
+    }
+    return "ROOM01";
+}
+
+void Server::handleRoomCreate(socket_t clientSocket, const std::string& nameEncoded) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    const std::string roomId = generateRoomId();
+    Room room;
+    room.name = nameEncoded;
+    room.members[username] = nowSeconds();
+    rooms_[roomId] = std::move(room);
+
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, roomId + " " + nameEncoded));
+}
+
+void Server::handleRoomJoin(socket_t clientSocket, const std::string& roomId) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    auto roomIt = rooms_.find(roomId);
+    if (roomIt == rooms_.end()) {
+        sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Room not found"));
+        return;
+    }
+    roomIt->second.members[username] = nowSeconds();
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, roomId + " " + roomIt->second.name));
+}
+
+void Server::handleRoomLeave(socket_t clientSocket, const std::string& roomId) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    auto roomIt = rooms_.find(roomId);
+    if (roomIt != rooms_.end()) {
+        roomIt->second.members.erase(username);
+    }
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, ""));
+}
+
+void Server::handleRoomMembers(socket_t clientSocket, const std::string& roomId) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    auto roomIt = rooms_.find(roomId);
+    if (roomIt == rooms_.end() || roomIt->second.members.find(username) == roomIt->second.members.end()) {
+        sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Room not found"));
+        return;
+    }
+
+    const long long now = nowSeconds();
+    std::ostringstream oss;
+    oss << roomIt->second.members.size();
+    for (const auto& [member, lastSeen] : roomIt->second.members) {
+        const bool online = (now - lastSeen) <= kRoomOnlineWindowSeconds;
+        oss << " " << member << ":" << (online ? 1 : 0);
+    }
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, oss.str()));
+}
+
+void Server::handleRoomSend(socket_t clientSocket, const std::string& roomId, const std::string& textEncoded) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    auto roomIt = rooms_.find(roomId);
+    if (roomIt == rooms_.end() || roomIt->second.members.find(username) == roomIt->second.members.end()) {
+        sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Room not found"));
+        return;
+    }
+
+    const long long now = nowSeconds();
+    roomIt->second.members[username] = now;
+
+    RoomMessage msg;
+    msg.id = roomIt->second.nextMessageId++;
+    msg.username = username;
+    msg.text = textEncoded;
+    msg.timestamp = now;
+    roomIt->second.messages.push_back(msg);
+    if (roomIt->second.messages.size() > 500) {
+        roomIt->second.messages.erase(roomIt->second.messages.begin());
+    }
+
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, std::to_string(msg.id)));
+}
+
+void Server::handleRoomFetch(socket_t clientSocket, const std::string& roomId, const std::string& sinceIdStr) {
+    std::string username;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex_);
+        auto clientIt = clients_.find(clientSocket);
+        if (clientIt == clients_.end()) {
+            sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Not connected"));
+            return;
+        }
+        username = clientIt->second.id;
+    }
+
+    uint64_t sinceId = 0;
+    try {
+        sinceId = std::stoull(sinceIdStr);
+    } catch (const std::exception&) {
+        sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Invalid since_id"));
+        return;
+    }
+
+    std::lock_guard<std::mutex> roomsLock(roomsMutex_);
+    auto roomIt = rooms_.find(roomId);
+    if (roomIt == rooms_.end() || roomIt->second.members.find(username) == roomIt->second.members.end()) {
+        sendResponse(clientSocket, Protocol::formatResponse(RESP_ERROR, "Room not found"));
+        return;
+    }
+    roomIt->second.members[username] = nowSeconds();
+
+    std::ostringstream oss;
+    std::ostringstream body;
+    size_t matched = 0;
+    for (const auto& msg : roomIt->second.messages) {
+        if (msg.id > sinceId) {
+            body << " " << msg.id << ":" << msg.username << ":" << msg.timestamp << ":" << msg.text;
+            ++matched;
+        }
+    }
+    oss << matched << body.str();
+    sendResponse(clientSocket, Protocol::formatResponse(RESP_OK, oss.str()));
 }
 
 void Server::handleList(socket_t clientSocket) {

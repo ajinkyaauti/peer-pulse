@@ -61,6 +61,37 @@ bool Protocol::isSafeFilename(const std::string& filename) {
     return true;
 }
 
+bool Protocol::isSafeRoomId(const std::string& roomId) {
+    if (roomId.size() < 4 || roomId.size() > 10) {
+        return false;
+    }
+
+    for (const unsigned char character : roomId) {
+        if (!std::isalnum(character)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Protocol::isSafeEncodedText(const std::string& text) {
+    // Caller (Flask) percent-encodes room names/messages before sending, so the
+    // server only ever sees a single space-free token here.
+    if (text.empty() || text.size() > 4000) {
+        return false;
+    }
+
+    for (const unsigned char character : text) {
+        if (!std::isalnum(character) && character != '%' && character != '-' &&
+            character != '_' && character != '.' && character != '~') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool Protocol::parseFileSize(const std::string& value, size_t& filesize) {
     if (value.empty()) {
         return false;

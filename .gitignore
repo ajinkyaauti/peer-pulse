@@ -98,6 +98,13 @@ certs/
 # Environment variables
 .env
 .env.local
+
+# Diagnostic/utility scripts (created during debugging)
+kill_web_server.ps1
+diag_port.ps1
+
+# Database files (user data - don't commit to git)
+p2p_auth.db
 PLAN.md
 /tests
 changes.md
@@ -110,3 +117,9 @@ build/.ninja_deps
 build/.ninja_log
 build/build.ninja
 build/CMakeCache.txt
+/build
+/build
+/build
+CMakeLists.txt
+start.bat
+*.bat

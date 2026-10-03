@@ -1,0 +1,19 @@
+# Render Blueprint — free-tier web service (ephemeral disk).
+# Set P2P_CORS_ORIGINS in the dashboard when using GitHub Pages for the UI.
+services:
+  - type: web
+    name: p2p-file-transfer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: P2P_WEB_DEBUG
+        value: "false"
+      - key: P2P_AUTH_DB
+        value: /app/data/p2p_auth.db
+      - key: P2P_CORS_ORIGINS
+        sync: false
+    healthCheckPath: /api/status
+    maxInstances: 1

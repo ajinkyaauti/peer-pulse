@@ -15,6 +15,12 @@ constexpr const char* CMD_DELETE = "DELETE";
 constexpr const char* CMD_PUBLIC = "PUBLIC";
 constexpr const char* CMD_PRIVATE = "PRIVATE";
 constexpr const char* CMD_DISCONNECT = "DISCONNECT";
+constexpr const char* CMD_ROOM_CREATE = "ROOM_CREATE";
+constexpr const char* CMD_ROOM_JOIN = "ROOM_JOIN";
+constexpr const char* CMD_ROOM_LEAVE = "ROOM_LEAVE";
+constexpr const char* CMD_ROOM_MEMBERS = "ROOM_MEMBERS";
+constexpr const char* CMD_ROOM_SEND = "ROOM_SEND";
+constexpr const char* CMD_ROOM_FETCH = "ROOM_FETCH";
 
 // Response codes
 constexpr const char* RESP_OK = "OK";
@@ -31,6 +37,8 @@ public:
     static bool extractCommand(std::string& buffer, std::string& command);
     static bool isSafePeerId(const std::string& peerId);
     static bool isSafeFilename(const std::string& filename);
+    static bool isSafeRoomId(const std::string& roomId);
+    static bool isSafeEncodedText(const std::string& text);
     static bool parseFileSize(const std::string& value, size_t& filesize);
     static std::string formatResponse(const std::string& status, const std::string& data);
     static std::string formatFileList(const std::vector<std::string>& files);
