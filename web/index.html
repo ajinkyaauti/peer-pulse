@@ -21,6 +21,7 @@
             <button class="tab-btn active" data-tab="setup">⚙️ Setup</button>
             <button class="tab-btn" data-tab="upload">📤 Upload</button>
             <button class="tab-btn" data-tab="files">📋 Files</button>
+            <button class="tab-btn" data-tab="room">💬 Room</button>
         </div>
 
         <div class="main-content">
@@ -93,6 +94,37 @@
                     <div id="myFilesList" class="files-list">
                         <p class="empty-state">No files shared yet</p>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Tab: Create/Join + Chat -->
+        <div class="tab-panel" id="tab-room">
+            <div class="panel room-join-panel" id="roomJoinPanel">
+                <h2>💬 Rooms</h2>
+                <div class="form-group">
+                    <label for="roomName">Room Name (for creating):</label>
+                    <input type="text" id="roomName" placeholder="e.g. Study Group">
+                </div>
+                <button id="createRoomBtn" class="btn btn-primary">➕ Create Room</button>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="roomIdInput">Room ID (to join):</label>
+                    <input type="text" id="roomIdInput" placeholder="e.g. AB3K9Z" maxlength="10" style="text-transform: uppercase;">
+                </div>
+                <button id="joinRoomBtn" class="btn btn-secondary">🚪 Join Room</button>
+                <p id="roomStatus" class="auth-status"></p>
+            </div>
+
+            <div class="panel room-chat-panel" id="roomChatPanel" style="display: none;">
+                <h2>Room: <span id="currentRoomName"></span> (<span id="currentRoomId"></span>)</h2>
+                <button id="leaveRoomBtn" class="btn btn-secondary">🚪 Leave Room</button>
+                <div class="room-members" id="roomMembers"></div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-row">
+                    <input type="file" id="roomFileInput" style="display:none;">
+                    <button id="roomFileBtn" class="btn btn-secondary" type="button" title="Share a file">📎</button>
+                    <input type="text" id="chatInput" placeholder="Type a message..." maxlength="1000">
+                    <button id="sendChatBtn" class="btn btn-primary">Send</button>
                 </div>
             </div>
         </div>

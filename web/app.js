@@ -8,6 +8,9 @@ class P2PClient {
         this.username = '';
         this.peerId = '';
         this.myFiles = [];
+        this.currentRoom = null;
+        this.lastMessageId = 0;
+        this.roomPollTimer = null;
         
         this.initElements();
         this.initEventListeners();
@@ -41,7 +44,23 @@ class P2PClient {
             myFilesList: document.getElementById('myFilesList'),
             activityLog: document.getElementById('activityLog'),
             statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText')
+            statusText: document.getElementById('statusText'),
+            roomName: document.getElementById('roomName'),
+            createRoomBtn: document.getElementById('createRoomBtn'),
+            roomIdInput: document.getElementById('roomIdInput'),
+            joinRoomBtn: document.getElementById('joinRoomBtn'),
+            roomStatus: document.getElementById('roomStatus'),
+            roomJoinPanel: document.getElementById('roomJoinPanel'),
+            roomChatPanel: document.getElementById('roomChatPanel'),
+            currentRoomName: document.getElementById('currentRoomName'),
+            currentRoomId: document.getElementById('currentRoomId'),
+            leaveRoomBtn: document.getElementById('leaveRoomBtn'),
+            roomMembers: document.getElementById('roomMembers'),
+            chatMessages: document.getElementById('chatMessages'),
+            chatInput: document.getElementById('chatInput'),
+            sendChatBtn: document.getElementById('sendChatBtn'),
+            roomFileInput: document.getElementById('roomFileInput'),
+            roomFileBtn: document.getElementById('roomFileBtn')
         };
     }
     
@@ -75,6 +94,20 @@ class P2PClient {
             this.elements.fileInput.files = e.dataTransfer.files;
             this.handleFileSelect({ target: this.elements.fileInput });
         });
+
+        // Rooms & chat
+        this.elements.createRoomBtn.addEventListener('click', () => this.createRoom());
+        this.elements.joinRoomBtn.addEventListener('click', () => this.joinRoom());
+        this.elements.leaveRoomBtn.addEventListener('click', () => this.leaveRoom());
+        this.elements.sendChatBtn.addEventListener('click', () => this.sendChatMessage());
+        this.elements.chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.sendChatMessage();
+            }
+        });
+        this.elements.roomFileBtn.addEventListener('click', () => this.elements.roomFileInput.click());
+        this.elements.roomFileInput.addEventListener('change', (e) => this.uploadRoomFile(e));
     }
     
     resolveServerUrl(serverAddr) {
@@ -137,7 +170,7 @@ class P2PClient {
     }
 
     setLockedTabs(locked) {
-        document.querySelectorAll('.tab-btn[data-tab="upload"], .tab-btn[data-tab="files"]').forEach(btn => {
+        document.querySelectorAll('.tab-btn[data-tab="upload"], .tab-btn[data-tab="files"], .tab-btn[data-tab="room"]').forEach(btn => {
             btn.disabled = locked;
             btn.title = locked ? 'Sign in first' : '';
         });
@@ -186,6 +219,9 @@ class P2PClient {
     async logout() {
         if (this.connected) {
             await this.disconnect();
+        }
+        if (this.currentRoom) {
+            await this.leaveRoom();
         }
 
         try {
@@ -431,6 +467,187 @@ class P2PClient {
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
         if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
         return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    async createRoom() {
+        const name = this.elements.roomName.value.trim();
+        try {
+            const data = await this.request('/api/rooms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            this.enterRoom(data.room_id, data.name);
+            this.log(`Created room ${data.room_id}`, 'success');
+        } catch (error) {
+            this.elements.roomStatus.textContent = `Failed to create room: ${error.message}`;
+            this.log(`Failed to create room: ${error.message}`, 'error');
+        }
+    }
+
+    async joinRoom() {
+        const roomId = this.elements.roomIdInput.value.trim().toUpperCase();
+        if (!roomId) {
+            this.elements.roomStatus.textContent = 'Enter a room ID';
+            return;
+        }
+        try {
+            const data = await this.request('/api/rooms/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_id: roomId })
+            });
+            this.enterRoom(data.room_id, data.name);
+            this.log(`Joined room ${data.room_id}`, 'success');
+        } catch (error) {
+            this.elements.roomStatus.textContent = `Failed to join room: ${error.message}`;
+            this.log(`Failed to join room: ${error.message}`, 'error');
+        }
+    }
+
+    enterRoom(roomId, name) {
+        this.currentRoom = roomId;
+        this.lastMessageId = 0;
+        this.elements.currentRoomId.textContent = roomId;
+        this.elements.currentRoomName.textContent = name;
+        this.elements.roomJoinPanel.style.display = 'none';
+        this.elements.roomChatPanel.style.display = 'block';
+        this.elements.chatMessages.innerHTML = '';
+        this.refreshRoomMembers();
+        this.pollRoomMessages();
+        this.roomPollTimer = setInterval(() => {
+            this.pollRoomMessages();
+            this.refreshRoomMembers();
+        }, 2500);
+    }
+
+    async leaveRoom() {
+        if (!this.currentRoom) return;
+        const roomId = this.currentRoom;
+
+        if (this.roomPollTimer) {
+            clearInterval(this.roomPollTimer);
+            this.roomPollTimer = null;
+        }
+
+        try {
+            await this.request('/api/rooms/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_id: roomId })
+            });
+        } catch (error) {
+            this.log(`Failed to leave room: ${error.message}`, 'error');
+        }
+
+        this.currentRoom = null;
+        this.elements.roomChatPanel.style.display = 'none';
+        this.elements.roomJoinPanel.style.display = 'block';
+        this.elements.roomStatus.textContent = '';
+        this.elements.roomIdInput.value = '';
+        this.log(`Left room ${roomId}`, 'info');
+    }
+
+    async pollRoomMessages() {
+        if (!this.currentRoom) return;
+        try {
+            const data = await this.request(
+                `/api/rooms/${this.currentRoom}/messages?since_id=${this.lastMessageId}`
+            );
+            for (const msg of data.messages) {
+                this.appendChatMessage(msg);
+                this.lastMessageId = Math.max(this.lastMessageId, msg.id);
+            }
+        } catch (error) {
+            console.error('Failed to poll messages:', error);
+        }
+    }
+
+    async refreshRoomMembers() {
+        if (!this.currentRoom) return;
+        try {
+            const data = await this.request(`/api/rooms/${this.currentRoom}/members`);
+            this.elements.roomMembers.innerHTML = data.members.map(member => `
+                <span class="room-member ${member.online ? 'online' : ''}">
+                    <span class="room-member-dot"></span>${this.escapeHtml(member.username)}
+                </span>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to refresh members:', error);
+        }
+    }
+
+    appendChatMessage(msg) {
+        const isOwn = msg.username === this.username;
+        const el = document.createElement('div');
+        el.className = `chat-message ${isOwn ? 'own' : ''}`;
+        const time = new Date(msg.created_at + 'Z').toLocaleTimeString();
+        el.innerHTML = `
+            <div class="chat-message-meta">${this.escapeHtml(msg.username)} • ${time}</div>
+            <div class="chat-message-text"></div>
+        `;
+
+        if (msg.type === 'file') {
+            const textEl = el.querySelector('.chat-message-text');
+            const link = document.createElement('a');
+            link.href = `${this.serverUrl}/api/rooms/${this.currentRoom}/files/${msg.file_id}/download`;
+            link.textContent = `📎 ${msg.file_name} (${this.formatSize(msg.file_size)})`;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            textEl.appendChild(link);
+        } else {
+            el.querySelector('.chat-message-text').textContent = msg.message;
+        }
+
+        this.elements.chatMessages.appendChild(el);
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    async uploadRoomFile(event) {
+        const file = event.target.files[0];
+        event.target.value = '';
+        if (!file || !this.currentRoom) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch(
+                `${this.serverUrl}/api/rooms/${this.currentRoom}/files`,
+                this.fetchOptions({ method: 'POST', body: formData })
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Upload failed');
+            }
+            this.log(`Shared file: ${data.filename}`, 'success');
+            this.pollRoomMessages();
+        } catch (error) {
+            this.log(`Failed to share file: ${error.message}`, 'error');
+        }
+    }
+
+    async sendChatMessage() {
+        const message = this.elements.chatInput.value.trim();
+        if (!message || !this.currentRoom) return;
+
+        this.elements.chatInput.value = '';
+        try {
+            await this.request(`/api/rooms/${this.currentRoom}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+            this.pollRoomMessages();
+        } catch (error) {
+            this.log(`Failed to send message: ${error.message}`, 'error');
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     log(message, type = 'info') {

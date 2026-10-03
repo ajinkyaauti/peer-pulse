@@ -5,8 +5,11 @@ This project can run in three ways:
 | Mode | Best for | UI URL | Backend |
 |------|----------|--------|---------|
 | **Docker locally** | Development, full P2P (ports 8080/8081) | `http://localhost:5000` | Same container |
+| **Native locally** | Development without Docker (recommended) | `http://localhost:5050` | Windows/native C++ + Flask |
 | **Render only** | One public URL, simplest cloud demo | `https://YOUR-SERVICE.onrender.com` | Same container (Flask serves `web/`) |
-| **GitHub Pages + Render** | “Pretty” static site + your API | `https://USER.github.io/REPO/` | Render Docker service |
+| **GitHub Pages + Render** | "Pretty" static site + your API | `https://USER.github.io/REPO/` | Render Docker service |
+
+> **Note:** Local development now uses port **5050** (not 5000) to avoid conflicts with Docker Desktop/WSL2 port shadowing on Windows machines.
 
 Example GitHub remote for this repo: `https://github.com/ajinkyaauti/peer-pulse`  
 → Pages URL: `https://ajinkyaauti.github.io/peer-pulse/`
@@ -33,14 +36,69 @@ Browser
 
 ---
 
-## Option A — Docker on your machine (recommended for full P2P)
+## Option A — Native local development (recommended for Windows; no Docker)
 
-Works on Windows, macOS, and Linux. Exposes **5000**, **8080**, and **8081**.
+Run the C++ tracker and Flask web server directly on your machine on separate ports.
 
-### 1. Create `.env` in the project root
+### 1. Install dependencies
+
+```bash
+cd <project-root>
+source venv/Scripts/activate
+pip install -r requirements.txt
+```
+
+*(Replace `<project-root>` with your actual project directory)*
+
+### 2. Create `.env` in project root
+
+Already created during setup; contains:
+```env
+FLASK_SECRET_KEY=<your-secret-key-here>
+P2P_WEB_PORT=5050
+```
+
+The `.env` file is auto-loaded by Flask via `python-dotenv` (no manual env var needed).
+
+### 3. Build and start C++ server (Terminal 1)
+
+```bash
+cmake -S . -B build -G Ninja
+cmake --build build --target p2p_server
+build/p2p_server.exe
+```
+
+### 4. Start Flask web server (Terminal 2)
+
+```bash
+source venv/Scripts/activate
+python web_server.py
+```
+
+Server listens on **http://127.0.0.1:5050** (avoids IPv6 shadowing by Docker/WSL).
+
+### 5. Open browser
+
+```
+http://localhost:5050
+```
+
+Or use the batch file:
+```bash
+start.bat
+```
+
+---
+
+## Option B — Docker on your machine (full containerized)
+
+Works on Windows, macOS, and Linux. Exposes **5000**, **8080**, and **8081** (no port shadowing inside the container).
+
+### 1. Create `.env` in the project root (if not exists)
 
 ```env
 FLASK_SECRET_KEY=replace-with-a-long-random-string
+P2P_WEB_PORT=5000
 ```
 
 PowerShell (generate a hex secret):
@@ -63,7 +121,7 @@ Data persists via Docker volumes: `authdb` (SQLite), `uploads` (files).
 
 ---
 
-## Option B — Render only (one URL, no GitHub Pages)
+## Option C — Render only (one URL, no GitHub Pages)
 
 The Docker image already includes the web UI. You do not need GitHub Pages unless you want the frontend on `github.io`.
 
@@ -96,7 +154,7 @@ Open `https://<your-service>.onrender.com` — same UI as local Docker.
 
 ---
 
-## Option C — GitHub Pages (UI) + Render (API)
+## Option D — GitHub Pages (UI) + Render (API)
 
 Use this when you want the public site on **github.io** and the API on **Render**.
 
