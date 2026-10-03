@@ -16,4 +16,3 @@ services:
       - key: P2P_CORS_ORIGINS
         sync: false
     healthCheckPath: /api/status
-    maxInstances: 1
