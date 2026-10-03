@@ -34,7 +34,7 @@ timeout /t 3 >nul
 
 echo Step 2: Starting Web Server (Python)...
 echo.
-echo Web Interface will be available at: http://localhost:5000
+echo Web Interface will be available at: http://localhost:5050
 echo.
 python web_server.py
 
