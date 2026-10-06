@@ -1,4 +1,0 @@
-cd C:\Users\AJINKYA\OneDrive\Desktop\project\backend_cpp\hello-server
-C:\cmake\bin\cmake.exe -B build -S . -G "NMake Makefiles"
-C:\cmake\bin\cmake.exe --build build --config Release
-build\hello_server.exe
