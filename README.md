@@ -45,3 +45,13 @@ cd ..
 ├── requirements.txt
 └── start.sh / start.bat
 ```
+
+## Live URLs
+
+| What | Address | Runs on |
+| --- | --- | --- |
+| Public site (UI only) | `https://ajinkyaauti.github.io/peer-pulse/` | GitHub Pages |
+| Backend + UI (same origin) | `https://p2p-file-transfer-6oi4.onrender.com` | Render, Docker, Oregon |
+| GitHub repo | `https://github.com/ajinkyaauti/peer-pulse` | GitHub |
+| CORS origin to allow | `https://ajinkyaauti.github.io` | Render env var |
+
